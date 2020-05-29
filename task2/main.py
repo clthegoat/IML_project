@@ -16,6 +16,7 @@ from score_submission import score_submission
 from sklearn.model_selection import KFold
 from sklearn.base import clone
 from scipy.special import expit
+from imblearn.over_sampling import SMOTE
 
 
 def ignore_warn(*args, **kwargs):
@@ -193,6 +194,34 @@ def evaluate_model(model, x_all, y_all, mode):
     return model
 
 
+def over_sampling(x_train, y_train, do_over_sampling):
+    print()
+    print("Doing over sampling...")
+    print("Before over sampling:")
+    class0_num = np.sum(y_train == 0)
+    class1_num = np.sum(y_train == 1)
+    print("#Sample in Class 0: {}".format(class0_num))
+    print("#Sample in Class 1: {}".format(class1_num))
+    if do_over_sampling:
+        # Using SMOTE: https://imbalanced-learn.readthedocs.io/en/stable/generated/imblearn.over_sampling.SMOTE.html
+        # an Over-sampling approach
+        # Over sampling on training and validation data
+        sm = SMOTE(sampling_strategy='auto', random_state=20)
+        x_train, y_train = sm.fit_resample(x_train, y_train)
+        # X_train, X_val, y_train, y_val = train_test_split(X_train,y,test_size=0.2,random_state=7)
+        x_out = x_train
+        y_out = y_train
+    else:
+        x_out = x_train
+        y_out = y_train
+    print("After over sampling:")
+    class0_num = np.sum(y_out == 0)
+    class1_num = np.sum(y_out == 1)
+    print("#Sample in Class 0: {}".format(class0_num))
+    print("#Sample in Class 1: {}".format(class1_num))
+    return x_out, y_out
+
+
 def main():
     print()
     print('***************By Manyeo***************')
@@ -200,7 +229,9 @@ def main():
     parser.add_argument('--method_t1', default='svm', help="choose models options:svm, xgboost, LogisticRegression")
     parser.add_argument('--method_t2', default='svm', help="choose models options:svm, xgboost, LogisticRegression")
     parser.add_argument('--method_t3', default='xgboost', help="choose models options:svm, xgboost, ensemble")
-    parser.add_argument('--select_feature_flag', default=False, help="select feature or not")
+    parser.add_argument('--select_feature_flag', default=True, help="select feature or not")
+    parser.add_argument('--do_over_sampling', default=True, help="do_over_sampling or not")
+
     # parser.add_argument('--Is_oversampling', type=bool, default='False', help="If over sampling")
     # parser.add_argument('--Is_downsampling', type=bool, default='True', help="If down sampling")
     opt = parser.parse_args()
@@ -217,7 +248,7 @@ def main():
     # test_ID = data_x_test['pid']
 
     test_ID = []
-    # print(len(data_x_test.index))
+    print(len(data_x_test.index))
     for i in range(0, len(data_x_test.index)):
         if i % 12 == 0:
             test_ID.append(data_x_test.values[i, 0])
@@ -227,8 +258,8 @@ def main():
     x_train = from_csv_to_ndarray(data=data_x)
     x_test = from_csv_to_ndarray(data=data_x_test)
 
-    x_train = x_train.reshape(int(x_train.shape[0] / 12), int(x_train.shape[1]*12))
-    x_test = x_test.reshape(int(x_test.shape[0] / 12), int(x_test.shape[1]*12))
+    x_train = x_train.reshape(int(x_train.shape[0] / 12), int(x_train.shape[1] * 12))
+    x_test = x_test.reshape(int(x_test.shape[0] / 12), int(x_test.shape[1] * 12))
     print("after reshape, x_train: {}".format(x_train.shape))
     print("after reshape, x_test: {}".format(x_test.shape))
 
@@ -250,12 +281,14 @@ def main():
         if opt.select_feature_flag:
             x_train_selected, y_train_selected, x_test_selected = select_feature(x_train, y_train[:, i], x_test)
         else:
-            x_train_selected=x_train
-            y_train_selected= y_train[:, i]
+            x_train_selected = x_train
+            y_train_selected = y_train[:, i]
             x_test_selected = x_test
+
         print('***************Predicting {}***************'.format(label))
         print()
         if 0 <= i < 10:  # subtask 1
+            x_train_selected, y_train_selected = over_sampling(x_train_selected, y_train_selected, opt.do_over_sampling)
             if opt.method_t1 == 'LogisticRegression':
                 print('Using Logistic Regression...')
                 clf = LogisticRegression(solver='liblinear', multi_class='auto', class_weight='balanced')
@@ -276,6 +309,7 @@ def main():
             sub['pid'] = test_ID
             sub['{}'.format(label)] = prediction
         elif i == 10:  # subtask 2
+            x_train_selected, y_train_selected = over_sampling(x_train_selected, y_train_selected, opt.do_over_sampling)
             if opt.method_t2 == 'LogisticRegression':
                 print('Using Logistic Regression...')
                 clf = LogisticRegression(solver='liblinear', multi_class='auto', class_weight='balanced')
